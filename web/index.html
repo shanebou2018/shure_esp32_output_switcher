@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MXN-AMP Switcher</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --panel: #ffffff; --text: #111827; --muted: #6b7280;
+    --border: #d1d5db; --btn: #e5e7eb; --btn-press: #d1d5db;
+    --led-off: #9ca3af; --led-on: #22c55e; --led-glow: rgba(34,197,94,.55);
+    --ok: #15803d; --warn: #b45309; --accent: #2563eb;
+    --log-bg: #f9fafb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --panel: #1a1d23; --text: #e5e7eb; --muted: #9ca3af;
+      --border: #2d323b; --btn: #262a31; --btn-press: #333844;
+      --led-off: #3a3f48; --led-on: #4ade80; --led-glow: rgba(74,222,128,.5);
+      --ok: #4ade80; --warn: #fbbf24; --accent: #60a5fa;
+      --log-bg: #13161b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-bottom: 16px;
+  }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .row { display: flex; gap: 8px; }
+  input {
+    flex: 1; min-width: 0; padding: 10px 12px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input.bad { border-color: #dc2626; }
+  button.apply {
+    padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer;
+    color: #fff; background: var(--accent); border: 0; border-radius: 8px;
+  }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .status { display: flex; justify-content: space-between; align-items: center;
+            font-size: 13px; margin-top: 12px; gap: 8px; flex-wrap: wrap; }
+  .pill { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); }
+  .pill.ok { color: var(--ok); border-color: currentColor; }
+  .pill.warn { color: var(--warn); border-color: currentColor; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 420px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  .ch {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 14px 6px; font: inherit; color: var(--text); cursor: pointer;
+    background: var(--btn); border: 1px solid var(--border); border-radius: 12px;
+    user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  .ch:active { background: var(--btn-press); transform: translateY(1px); }
+  .ch:disabled { cursor: not-allowed; opacity: .7; }
+  .led {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--led-off); transition: background .12s, box-shadow .12s;
+  }
+  .led.on { background: var(--led-on); box-shadow: 0 0 12px 3px var(--led-glow); }
+  .led.pending { animation: pend .3s ease-in-out infinite alternate; }
+  .led.blink { animation: blink 1s steps(1) infinite; }
+  @keyframes pend { to { opacity: .45; } }
+  @keyframes blink { 50% { background: var(--led-on); box-shadow: 0 0 12px 3px var(--led-glow); } }
+  .ch b { font-size: 14px; }
+  .ch small { font-size: 12px; color: var(--muted); }
+  .log {
+    background: var(--log-bg); border: 1px solid var(--border); border-radius: 8px;
+    height: 180px; overflow-y: auto; padding: 8px 10px; margin: 0;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .tx { color: var(--accent); }
+  .rx { color: var(--ok); }
+  .sys { color: var(--muted); }
+  .logHead { display: flex; justify-content: space-between; align-items: baseline; }
+  .linkBtn { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>MXN-AMP Output Switcher</h1>
+  <p class="sub">Four latching outputs. Each LED shows the state the amp reports: lit means the output is on (unmuted).</p>
+
+  <section class="panel">
+    <label for="ip">Amp IP address</label>
+    <div class="row">
+      <input id="ip" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="192.168.1.50">
+      <button class="apply" id="apply">Apply</button>
+    </div>
+    <div class="hint">Temporary. Only kept until the controller restarts.</div>
+    <div class="status">
+      <span id="conn" class="pill warn">Disconnected</span>
+      <span id="mode" class="pill">Simulation</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section class="panel">
+    <div class="logHead">
+      <label>Command log</label>
+      <button class="linkBtn" id="clear">Clear</button>
+    </div>
+    <pre class="log" id="log"></pre>
+  </section>
+</main>
+
+<script>
+/*
+ * Two modes:
+ *  - Live: page is served by the ESP32, which exposes
+ *      GET  /api/state            -> {"ampIp":"x.x.x.x","connected":true,"outputs":[true,false,true,false],"log":["..."]}
+ *      POST /api/press?ch=1..4    -> toggles that output on the amp
+ *      POST /api/ip?ip=x.x.x.x    -> temporary amp IP (RAM only), reconnects
+ *  - Simulation: /api/state is not reachable (e.g. opened as a local file),
+ *    so a fake amp in this page answers with Shure REP strings.
+ */
+const CHANNELS = 4;
+const $ = (id) => document.getElementById(id);
+const ipRe = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+let live = false;
+let connected = false;
+let outputs = [false, false, false, false];   // true = unmuted = LED on
+let pending = [false, false, false, false];
+const leds = [];
+
+// ---------- UI ----------
+function buildGrid() {
+  for (let i = 0; i < CHANNELS; i++) {
+    const b = document.createElement('button');
+    b.className = 'ch';
+    b.innerHTML = `<span class="led"></span><b>Output ${i + 1}</b><small>Off</small>`;
+    b.addEventListener('click', () => press(i + 1));
+    $('grid').appendChild(b);
+    leds.push(b);
+  }
+}
+
+function render() {
+  const c = $('conn');
+  c.textContent = connected ? 'Connected' : 'Disconnected';
+  c.className = 'pill ' + (connected ? 'ok' : 'warn');
+  $('mode').textContent = live ? 'Live (ESP32)' : 'Simulation';
+  leds.forEach((b, i) => {
+    const led = b.querySelector('.led');
+    led.className = 'led' +
+      (!connected ? ' blink' : outputs[i] ? ' on' : '') +
+      (connected && pending[i] ? ' pending' : '');
+    b.querySelector('small').textContent = !connected ? '—' : outputs[i] ? 'On' : 'Off';
+    b.disabled = !connected;
+  });
+}
+
+function log(text, cls) {
+  const el = $('log');
+  const line = document.createElement('div');
+  const t = new Date().toLocaleTimeString([], { hour12: false });
+  line.className = cls;
+  line.textContent = `${t}  ${cls === 'tx' ? '→' : cls === 'rx' ? '←' : '·'} ${text}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// Parse a Shure REP string and update state, same rule as the firmware.
+function handleRep(msg) {
+  log(msg, 'rx');
+  const m = msg.match(/<\s*REP\s+(\d{2})\s+AUDIO_MUTE\s+(ON|OFF)\s*>/);
+  if (!m) return;
+  const ch = parseInt(m[1], 10);
+  if (ch < 1 || ch > CHANNELS) return;
+  outputs[ch - 1] = m[2] === 'OFF';   // mute OFF = output on
+  pending[ch - 1] = false;
+  render();
+}
+
+// ---------- Simulated amp ----------
+const sim = {
+  mutes: [false, true, true, true],          // amp's own state
+  send(cmd) {
+    log(cmd, 'tx');
+    setTimeout(() => {
+      let m;
+      if ((m = cmd.match(/<\s*GET\s+00\s+AUDIO_MUTE\s*>/))) {
+        this.mutes.forEach((v, i) => handleRep(`< REP 0${i + 1} AUDIO_MUTE ${v ? 'ON' : 'OFF'} >`));
+      } else if ((m = cmd.match(/<\s*SET\s+(\d{2})\s+AUDIO_MUTE\s+TOGGLE\s*>/))) {
+        const i = parseInt(m[1], 10) - 1;
+        this.mutes[i] = !this.mutes[i];
+        handleRep(`< REP ${m[1]} AUDIO_MUTE ${this.mutes[i] ? 'ON' : 'OFF'} >`);
+      }
+    }, 120 + Math.random() * 180);   // fake network round trip
+  },
+  connect(ip) {
+    connected = false; render();
+    log(`Connecting to ${ip}:2202 …`, 'sys');
+    setTimeout(() => {
+      connected = true;
+      log(`Connected to ${ip}:2202 (simulated)`, 'sys');
+      render();
+      this.send('< GET 00 AUDIO_MUTE >');
+    }, 800);
+  },
+};
+
+// ---------- Live (ESP32) ----------
+let seenLog = 0;
+async function poll() {
+  try {
+    const r = await fetch('/api/state', { cache: 'no-store' });
+    const s = await r.json();
+    connected = !!s.connected;
+    outputs = s.outputs.map(Boolean);
+    pending = pending.map(() => false);
+    if (document.activeElement !== $('ip') && !$('ip').value) $('ip').value = s.ampIp || '';
+    if (Array.isArray(s.log)) {
+      // Firmware returns its most recent lines; print only ones we have not shown.
+      const total = s.logTotal ?? s.log.length;
+      const fresh = s.log.slice(Math.max(0, s.log.length - (total - seenLog)));
+      fresh.forEach((l) => log(l, l.startsWith('< REP') ? 'rx' : l.startsWith('<') ? 'tx' : 'sys'));
+      seenLog = total;
+    }
+  } catch (e) {
+    connected = false;
+  }
+  render();
+}
+
+// ---------- Actions ----------
+async function press(ch) {
+  if (!connected) return;
+  pending[ch - 1] = true;   // LED waits for the amp's REP (behaviour rule 1)
+  render();
+  const cmd = `< SET 0${ch} AUDIO_MUTE TOGGLE >`;
+  if (live) {
+    try { await fetch(`/api/press?ch=${ch}`, { method: 'POST' }); } catch (e) {}
+    poll();
+  } else {
+    sim.send(cmd);
+  }
+}
+
+async function applyIp() {
+  const input = $('ip');
+  const ip = input.value.trim();
+  if (!ipRe.test(ip)) { input.classList.add('bad'); input.focus(); return; }
+  input.classList.remove('bad');
+  if (live) {
+    log(`Set amp IP to ${ip} (temporary)`, 'sys');
+    try { await fetch(`/api/ip?ip=${encodeURIComponent(ip)}`, { method: 'POST' }); } catch (e) {}
+    poll();
+  } else {
+    sim.connect(ip);
+  }
+}
+
+$('apply').addEventListener('click', applyIp);
+$('ip').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyIp(); });
+$('ip').addEventListener('input', () => $('ip').classList.remove('bad'));
+$('clear').addEventListener('click', () => { $('log').textContent = ''; });
+
+// ---------- Start ----------
+buildGrid();
+render();
+(async () => {
+  try {
+    const r = await fetch('/api/state', { cache: 'no-store' });
+    if (!r.ok) throw 0;
+    await r.json();
+    live = true;
+    log('Served by ESP32, live mode', 'sys');
+    poll();
+    setInterval(poll, 500);
+  } catch (e) {
+    live = false;
+    log('No ESP32 found, simulation mode. Enter any IP and press Apply.', 'sys');
+    $('ip').value = '192.168.1.50';
+    render();
+  }
+})();
+</script>
+</body>
+</html>

@@ -60,8 +60,34 @@ src/main.cpp            # setup/loop, wiring the modules together
 src/shure_client.*      # TCP connection, send/parse Shure command strings, reconnect
 src/buttons.*           # debounced edge detection for 4 buttons
 src/leds.*              # LED output + "no connection" blink pattern
+src/web.*               # HTTP server: serves web/index.html + /api/* endpoints
+web/index.html          # simple control page (also runs standalone in simulation mode)
 MXN-AMP.md              # Shure MXN-AMP + Dante API reference notes
 ```
+
+## Web page (`web/index.html`)
+
+A single self-contained HTML file with no external dependencies. The ESP32
+serves it at `/`. It lets someone temporarily change the amp IP, press the
+4 outputs, and see the LEDs mirror the amp's state, plus a log of the Shure
+strings sent and received.
+
+- **Simulation mode:** if `/api/state` cannot be reached (for example when
+  the file is opened straight from disk), a fake amp inside the page answers
+  with `REP` strings. Use this to try the UI without hardware.
+- **Live mode:** when the ESP32 serves the page, it polls the API every 500 ms.
+
+HTTP API the firmware must implement (keep it in sync with the page):
+
+| Method | Path | Behaviour |
+|---|---|---|
+| GET | `/` | Serves `web/index.html` (embedded in flash) |
+| GET | `/api/state` | `{"ampIp":"x.x.x.x","connected":bool,"outputs":[bool×4],"log":["..."],"logTotal":n}`. `outputs[i]` is true when the channel is unmuted. `log` holds the recent command lines, and `logTotal` counts every line ever logged. |
+| POST | `/api/press?ch=1..4` | Same as pressing the physical button: sends `SET 0n AUDIO_MUTE TOGGLE` |
+| POST | `/api/ip?ip=x.x.x.x` | Sets the amp IP **in RAM only** (lost on reboot) and reconnects |
+
+The web press follows the same rule as the buttons: the state changes only
+when the amp's `REP` comes back.
 
 ## Build / flash / monitor
 
