@@ -10,6 +10,10 @@ An ESP32 wall/desk controller that switches the outputs of a **Shure MXN-AMP**
 
 - Each button is paired with one amplifier output channel (Button 1 → Ch 1, ...).
 - Pressing a button **toggles** (latches) that output on/off.
+- Buttons are **independent** (decided): any combination of zones can be on,
+  including all or none. One press sends exactly one command,
+  `< SET nn AUDIO_MUTE TOGGLE >`, where `nn` is that button's **amp output**
+  channel.
 - Each LED shows the **actual state reported by the amp**, not just the last
   button press. LED on = output active (unmuted), LED off = output muted.
 - If the amp changes state from elsewhere (Designer, web UI, another
@@ -19,6 +23,26 @@ Control is done over the network with **Shure third-party command strings**
 (ASCII over TCP port 2202). Dante is used only for audio transport between
 the source and the amp. The ESP32 does not touch Dante routing. See
 `MXN-AMP.md` for the API reference and the reasons for this choice.
+
+### Signal flow
+
+```
+Source (Dante) ──► MXN-AMP Dante input 1 ──┬──► Amp output 1 ──► Zone 1   [Button/LED 1]
+                                           ├──► Amp output 2 ──► Zone 2   [Button/LED 2]
+                                           ├──► Amp output 3 ──► Zone 3   [Button/LED 3]
+                                           └──► Amp output 4 ──► Zone 4   [Button/LED 4]
+                                                    ▲
+                                  ESP32 only mutes/unmutes here
+```
+
+- Audio always reaches all four amp channels. This is set up once, either by
+  subscribing all four MXN-AMP Dante inputs to the same source channel in
+  Dante Controller, or with the amp's internal routing if it has any. The
+  ESP32 never changes it.
+- The buttons mute/unmute the **amp output** channels only. Never mute
+  input 1, because that silences every zone. The channel numbers for outputs
+  vs inputs are still unverified (see `MXN-AMP.md`). Keep them in `config.h`
+  (`kOutputChannel[4]`) so they can be fixed without code changes.
 
 ## Hardware (proposed, confirm before wiring)
 
@@ -109,8 +133,7 @@ pio device monitor -b 115200 # serial log
    hold or auto-repeat.
 6. Nothing in `loop()` may block for long. Use a non-blocking socket read
    with a line buffer split on `>`.
-7. Optional "exclusive" mode (radio-button: only one output on at a time) is
-   a compile-time flag in `config.h`. The default is independent latching.
+7. Buttons are independent. Do not add an "exclusive"/radio mode unless asked.
 
 ## Conventions
 
