@@ -67,9 +67,11 @@ Gain scaling (Shure convention): `AUDIO_GAIN_HI_RES` runs from `0000` to
 `1400` in 0.1 dB steps with an offset of 1100, so `1100` = 0 dB, `0000` =
 −110 dB, and `1400` = +30 dB. Confirm the MXN-AMP range.
 
-> **Check on the official page:** (a) the exact channel numbers that map to
-> the 4 **speaker outputs** as opposed to the 4 Dante inputs, and whether they
-> are separate blocks (e.g. input 01–04 vs output 05–08), (b) whether
+> **Channel numbers (confirmed on the amp):** the 4 amplifier **outputs**
+> are channels **06–09** (zone 1 = 06 ... zone 4 = 09). The lower numbers are
+> inputs, so never mute those from the switcher.
+>
+> **Still check on the official page:** (b) whether
 > `TOGGLE` is supported, (c) whether a matrix/routing command exists
 > (`MATRIX_MXR_ROUTE` / `MATRIX_MXR_GAIN` on other Shure DSPs). If there is
 > one, "switch output" could mean routing a source to an output instead of
@@ -79,13 +81,15 @@ Gain scaling (Shure convention): `AUDIO_GAIN_HI_RES` runs from `0000` to
 
 ```
 ESP32 → < GET 00 AUDIO_MUTE >
-AMP   → < REP 01 AUDIO_MUTE OFF >
-AMP   → < REP 02 AUDIO_MUTE ON >
-AMP   → < REP 03 AUDIO_MUTE ON >
-AMP   → < REP 04 AUDIO_MUTE OFF >        # LEDs: 1 on, 2 off, 3 off, 4 on
+AMP   → < REP 01 AUDIO_MUTE OFF >        # input channels: ignored
+...
+AMP   → < REP 06 AUDIO_MUTE OFF >
+AMP   → < REP 07 AUDIO_MUTE ON >
+AMP   → < REP 08 AUDIO_MUTE ON >
+AMP   → < REP 09 AUDIO_MUTE OFF >        # LEDs: 1 on, 2 off, 3 off, 4 on
 [user presses button 2]
-ESP32 → < SET 02 AUDIO_MUTE TOGGLE >
-AMP   → < REP 02 AUDIO_MUTE OFF >        # LED 2 turns on now
+ESP32 → < SET 07 AUDIO_MUTE TOGGLE >
+AMP   → < REP 07 AUDIO_MUTE OFF >        # LED 2 turns on now
 ```
 
 ### Quick test from a laptop (before writing firmware)

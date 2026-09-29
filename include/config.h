@@ -22,9 +22,9 @@ constexpr uint16_t kAmpPort = 2202;
 constexpr int kNumZones = 4;
 
 // Shure channel number of the amp OUTPUT for each zone (button 1..4).
-// TODO: verify against the official MXN-AMP command strings. Must be the
-// amplifier output channels, not Dante input 1 (muting that silences every zone).
-constexpr int kOutputChannel[kNumZones] = {1, 2, 3, 4};
+// Confirmed on the MXN-AMP: amplifier outputs are channels 06-09. Never use
+// the input channels here; muting Dante input 1 would silence every zone.
+constexpr int kOutputChannel[kNumZones] = {6, 7, 8, 9};
 
 // ---- Pins (generic ESP32 DevKit) ----
 // Buttons: momentary to GND, internal pull-up, active LOW.

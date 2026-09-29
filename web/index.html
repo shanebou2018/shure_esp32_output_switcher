@@ -127,6 +127,8 @@
  *    so a fake amp in this page answers with Shure REP strings.
  */
 const CHANNELS = 4;
+const OUTPUT_CH = [6, 7, 8, 9];   // amp output channel per zone (matches config.h)
+const chStr = (n) => String(n).padStart(2, '0');
 const $ = (id) => document.getElementById(id);
 const ipRe = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
@@ -179,10 +181,10 @@ function handleRep(msg) {
   log(msg, 'rx');
   const m = msg.match(/<\s*REP\s+(\d{2})\s+AUDIO_MUTE\s+(ON|OFF)\s*>/);
   if (!m) return;
-  const ch = parseInt(m[1], 10);
-  if (ch < 1 || ch > CHANNELS) return;
-  outputs[ch - 1] = m[2] === 'OFF';   // mute OFF = output on
-  pending[ch - 1] = false;
+  const zone = OUTPUT_CH.indexOf(parseInt(m[1], 10));
+  if (zone < 0) return;   // not one of our amp outputs (e.g. an input channel)
+  outputs[zone] = m[2] === 'OFF';   // mute OFF = output on
+  pending[zone] = false;
   render();
 }
 
@@ -194,9 +196,10 @@ const sim = {
     setTimeout(() => {
       let m;
       if ((m = cmd.match(/<\s*GET\s+00\s+AUDIO_MUTE\s*>/))) {
-        this.mutes.forEach((v, i) => handleRep(`< REP 0${i + 1} AUDIO_MUTE ${v ? 'ON' : 'OFF'} >`));
+        this.mutes.forEach((v, i) => handleRep(`< REP ${chStr(OUTPUT_CH[i])} AUDIO_MUTE ${v ? 'ON' : 'OFF'} >`));
       } else if ((m = cmd.match(/<\s*SET\s+(\d{2})\s+AUDIO_MUTE\s+TOGGLE\s*>/))) {
-        const i = parseInt(m[1], 10) - 1;
+        const i = OUTPUT_CH.indexOf(parseInt(m[1], 10));
+        if (i < 0) return;
         this.mutes[i] = !this.mutes[i];
         handleRep(`< REP ${m[1]} AUDIO_MUTE ${this.mutes[i] ? 'ON' : 'OFF'} >`);
       }
@@ -245,7 +248,7 @@ async function press(ch) {
   pending[ch - 1] = true;
   pressedAt[ch - 1] = Date.now();   // LED waits for the amp's REP (behaviour rule 1)
   render();
-  const cmd = `< SET 0${ch} AUDIO_MUTE TOGGLE >`;
+  const cmd = `< SET ${chStr(OUTPUT_CH[ch - 1])} AUDIO_MUTE TOGGLE >`;
   if (live) {
     try { await fetch(`/api/press?ch=${ch}`, { method: 'POST' }); } catch (e) {}
     poll();

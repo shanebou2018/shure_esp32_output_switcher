@@ -39,10 +39,10 @@ Source (Dante) ──► MXN-AMP Dante input 1 ──┬──► Amp output 1 �
   subscribing all four MXN-AMP Dante inputs to the same source channel in
   Dante Controller, or with the amp's internal routing if it has any. The
   ESP32 never changes it.
-- The buttons mute/unmute the **amp output** channels only. Never mute
-  input 1, because that silences every zone. The channel numbers for outputs
-  vs inputs are still unverified (see `MXN-AMP.md`). Keep them in `config.h`
-  (`kOutputChannel[4]`) so they can be fixed without code changes.
+- The buttons mute/unmute the **amp output** channels only: **06, 07, 08,
+  09** for zones 1–4 (confirmed on the amp, `kOutputChannel` in `config.h`).
+  Never mute the input channels, because that silences every zone.
+  `REP` messages for any other channel are ignored.
 
 ## Hardware
 
