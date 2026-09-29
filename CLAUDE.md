@@ -44,33 +44,42 @@ Source (Dante) ──► MXN-AMP Dante input 1 ──┬──► Amp output 1 �
   vs inputs are still unverified (see `MXN-AMP.md`). Keep them in `config.h`
   (`kOutputChannel[4]`) so they can be fixed without code changes.
 
-## Hardware (proposed, confirm before wiring)
+## Hardware
 
 | Item | Notes |
 |---|---|
-| MCU | ESP32 with wired Ethernet preferred (e.g. Olimex ESP32-POE, WT32-ETH01). Wi-Fi ESP32 DevKit works if the AV VLAN is reachable over Wi-Fi. |
+| MCU | **Generic ESP32 DevKit (esp32dev) over Wi-Fi** (decided). |
 | Buttons | 4 momentary push buttons, wired to GND, using the internal pull-up (`INPUT_PULLUP`), active LOW. |
-| LEDs | 4 LEDs, each with a series resistor (~220–470 Ω), driven HIGH = on. Illuminated buttons can share the pin plan. |
-| Network | Same subnet/VLAN as the MXN-AMP **control** interface. |
+| LEDs | 4 LEDs, each with a series resistor (~220–470 Ω) to GND, driven HIGH = on. |
+| Network | The Wi-Fi network must be able to reach the MXN-AMP **control** IP on TCP 2202. |
 
-Default pin map (change in `include/config.h` once it exists; avoid strapping
-pins 0, 2, 12, 15 and the Ethernet RMII pins on Ethernet boards):
+Pin map (`include/config.h`). These pins all have internal pull-ups and avoid
+the strapping pins (0, 2, 5, 12, 15) and the flash pins (6–11):
 
-| Channel | Button GPIO | LED GPIO |
+| Zone | Button GPIO | LED GPIO |
 |---|---|---|
-| 1 | 32 | 4 |
-| 2 | 33 | 13 |
-| 3 | 34* | 14 |
-| 4 | 35* | 15 |
+| 1 | 32 | 16 |
+| 2 | 33 | 17 |
+| 3 | 25 | 18 |
+| 4 | 26 | 19 |
 
-\* GPIO 34–39 are input-only and have **no internal pull-up**, so use an
-external 10 kΩ pull-up or choose different pins. Recheck this table against
-the board you actually pick.
+## Wi-Fi credentials
+
+- They live in `include/secrets.h`, which is **git-ignored because the repo
+  is public**. Copy `include/secrets.example.h` to `include/secrets.h` and
+  set `WIFI_SSID` / `WIFI_PASSWORD`. The current site uses SSID `Sound`; the
+  password is in your local file only.
+- If `secrets.h` is missing, the build warns and uses placeholders.
+- Planned: make the SSID/password changeable at runtime (web page + NVS
+  `Preferences`), keeping `secrets.h` as the default.
+- After it connects, the device is reachable at `http://mxn-switcher.local/`
+  (mDNS) or at the IP printed on the serial monitor.
 
 ## Software stack
 
 - **PlatformIO** + **Arduino framework** for ESP32 (`platformio.ini` at repo root).
-- Networking: `ETH.h` (wired) or `WiFi.h`, with `WiFiClient` for the TCP socket to the amp.
+- Networking: `WiFi.h`, `WiFiClient` for the TCP socket to the amp, `WebServer` for the page, `ESPmDNS`.
+- `web/index.html` is embedded in flash through `board_build.embed_txtfiles` (symbol `_binary_web_index_html_start`). Edit the HTML file directly; no conversion step.
 - No heavy dependencies. Debounce and the parsing of command strings are done
   in plain code in this project.
 
@@ -78,8 +87,8 @@ Planned layout:
 
 ```
 platformio.ini
-include/config.h        # pins, amp IP, port, network creds (secrets NOT committed)
-include/secrets.h       # git-ignored; copy from secrets.example.h
+include/config.h        # pins, amp IP/port, zone->amp output channel map, timings
+include/secrets.h       # git-ignored Wi-Fi creds; copy from secrets.example.h
 src/main.cpp            # setup/loop, wiring the modules together
 src/shure_client.*      # TCP connection, send/parse Shure command strings, reconnect
 src/buttons.*           # debounced edge detection for 4 buttons

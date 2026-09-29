@@ -134,6 +134,7 @@ let live = false;
 let connected = false;
 let outputs = [false, false, false, false];   // true = unmuted = LED on
 let pending = [false, false, false, false];
+const pressedAt = [0, 0, 0, 0];
 const leds = [];
 
 // ---------- UI ----------
@@ -220,8 +221,10 @@ async function poll() {
     const r = await fetch('/api/state', { cache: 'no-store' });
     const s = await r.json();
     connected = !!s.connected;
-    outputs = s.outputs.map(Boolean);
-    pending = pending.map(() => false);
+    const next = s.outputs.map(Boolean);
+    // Keep the "waiting" pulse until the amp's reply changes the state (or 2 s pass).
+    pending = pending.map((p, i) => p && connected && next[i] === outputs[i] && Date.now() - pressedAt[i] < 2000);
+    outputs = next;
     if (document.activeElement !== $('ip') && !$('ip').value) $('ip').value = s.ampIp || '';
     if (Array.isArray(s.log)) {
       // Firmware returns its most recent lines; print only ones we have not shown.
@@ -239,7 +242,8 @@ async function poll() {
 // ---------- Actions ----------
 async function press(ch) {
   if (!connected) return;
-  pending[ch - 1] = true;   // LED waits for the amp's REP (behaviour rule 1)
+  pending[ch - 1] = true;
+  pressedAt[ch - 1] = Date.now();   // LED waits for the amp's REP (behaviour rule 1)
   render();
   const cmd = `< SET 0${ch} AUDIO_MUTE TOGGLE >`;
   if (live) {
@@ -256,7 +260,6 @@ async function applyIp() {
   if (!ipRe.test(ip)) { input.classList.add('bad'); input.focus(); return; }
   input.classList.remove('bad');
   if (live) {
-    log(`Set amp IP to ${ip} (temporary)`, 'sys');
     try { await fetch(`/api/ip?ip=${encodeURIComponent(ip)}`, { method: 'POST' }); } catch (e) {}
     poll();
   } else {
