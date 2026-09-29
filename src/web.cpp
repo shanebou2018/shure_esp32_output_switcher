@@ -36,7 +36,11 @@ void handleState() {
   json += ",\"outputs\":[";
   for (int i = 0; i < kNumZones; i++) {
     if (i) json += ',';
-    json += amp->zoneOn()[i] ? "true" : "false";
+    switch (amp->zoneStates()[i]) {
+      case ZoneState::kUnmuted: json += "true"; break;
+      case ZoneState::kMuted: json += "false"; break;
+      default: json += "null"; break;
+    }
   }
   json += "],\"log\":[";
   for (int i = 0; i < amp->logCount(); i++) {
@@ -56,7 +60,7 @@ void handlePress() {
     server.send(400, "text/plain", "ch must be 1-4");
     return;
   }
-  if (!amp->toggleZone(ch - 1)) {
+  if (!amp->pressZone(ch - 1)) {
     server.send(503, "text/plain", "amp not connected");
     return;
   }

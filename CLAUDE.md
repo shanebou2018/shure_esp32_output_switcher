@@ -6,16 +6,26 @@ Guidance for Claude Code when working in this repository.
 
 An ESP32 wall/desk controller that switches the outputs of a **Shure MXN-AMP**
 (PoE+ powered 4-channel Dante amplifier) using **4 push buttons** with
-**4 LEDs** for latching feedback.
+**8 LEDs** (a green and a red per zone) for latching feedback.
 
-- Each button is paired with one amplifier output channel (Button 1 → Ch 1, ...).
-- Pressing a button **toggles** (latches) that output on/off.
+- Each button is paired with one amplifier output channel (zone 1–4 → amp output 06–09).
+- Pressing a button flips (latches) that output between muted and unmuted.
 - Buttons are **independent** (decided): any combination of zones can be on,
-  including all or none. One press sends exactly one command,
-  `< SET nn AUDIO_MUTE TOGGLE >`, where `nn` is that button's **amp output**
-  channel.
-- Each LED shows the **actual state reported by the amp**, not just the last
-  button press. LED on = output active (unmuted), LED off = output muted.
+  including all or none.
+- One press sends **one explicit command**, chosen from the state the amp last
+  reported. **`TOGGLE` is never used.**
+  - Zone reported muted → `< SET nn AUDIO_MUTE OFF >`
+  - Zone reported unmuted → `< SET nn AUDIO_MUTE ON >`
+  - State not known yet → `< GET nn AUDIO_MUTE >` only. Never guess.
+- LEDs must match the amp **100%**. They show only what the amp reported:
+
+  | Amp state | Green LED | Red LED |
+  |---|---|---|
+  | Unmuted | on | off |
+  | Muted | off | on |
+  | Not known yet (just connected) | off | off |
+  | ESP32 not connected to the amp | off | all blink together |
+
 - If the amp changes state from elsewhere (Designer, web UI, another
   controller), the LEDs follow it.
 
@@ -50,18 +60,18 @@ Source (Dante) ──► MXN-AMP Dante input 1 ──┬──► Amp output 1 �
 |---|---|
 | MCU | **Generic ESP32 DevKit (esp32dev) over Wi-Fi** (decided). |
 | Buttons | 4 momentary push buttons, wired to GND, using the internal pull-up (`INPUT_PULLUP`), active LOW. |
-| LEDs | 4 LEDs, each with a series resistor (~220–470 Ω) to GND, driven HIGH = on. |
+| LEDs | 8 LEDs: 4 green (unmuted) + 4 red (muted), each with its own series resistor (~220–470 Ω) to GND, driven HIGH = on. |
 | Network | The Wi-Fi network must be able to reach the MXN-AMP **control** IP on TCP 2202. |
 
 Pin map (`include/config.h`). These pins all have internal pull-ups and avoid
 the strapping pins (0, 2, 5, 12, 15) and the flash pins (6–11):
 
-| Zone | Button GPIO | LED GPIO |
-|---|---|---|
-| 1 | 32 | 16 |
-| 2 | 33 | 17 |
-| 3 | 25 | 18 |
-| 4 | 26 | 19 |
+| Zone | Amp output | Button GPIO | Green LED GPIO | Red LED GPIO |
+|---|---|---|---|---|
+| 1 | 06 | 32 | 16 | 21 |
+| 2 | 07 | 33 | 17 | 22 |
+| 3 | 08 | 25 | 18 | 23 |
+| 4 | 09 | 26 | 19 | 27 |
 
 ## Wi-Fi credentials
 
@@ -92,7 +102,8 @@ include/secrets.h       # git-ignored Wi-Fi creds; copy from secrets.example.h
 src/main.cpp            # setup/loop, wiring the modules together
 src/shure_client.*      # TCP connection, send/parse Shure command strings, reconnect
 src/buttons.*           # debounced edge detection for 4 buttons
-src/leds.*              # LED output + "no connection" blink pattern
+src/zone_state.h        # ZoneState: kUnknown / kMuted / kUnmuted
+src/leds.*              # green/red LED output + "no connection" blink pattern
 src/web.*               # HTTP server: serves web/index.html + /api/* endpoints
 web/index.html          # simple control page (also runs standalone in simulation mode)
 MXN-AMP.md              # Shure MXN-AMP + Dante API reference notes
@@ -115,8 +126,8 @@ HTTP API the firmware must implement (keep it in sync with the page):
 | Method | Path | Behaviour |
 |---|---|---|
 | GET | `/` | Serves `web/index.html` (embedded in flash) |
-| GET | `/api/state` | `{"ampIp":"x.x.x.x","connected":bool,"outputs":[bool×4],"log":["..."],"logTotal":n}`. `outputs[i]` is true when the channel is unmuted. `log` holds the recent command lines, and `logTotal` counts every line ever logged. |
-| POST | `/api/press?ch=1..4` | Same as pressing the physical button: sends `SET 0n AUDIO_MUTE TOGGLE` |
+| GET | `/api/state` | `{"ampIp":"x.x.x.x","connected":bool,"outputs":[true|false|null ×4],"log":["..."],"logTotal":n}`. `outputs[i]`: true = unmuted, false = muted, null = not known. `log` holds the recent command lines, and `logTotal` counts every line ever logged. |
+| POST | `/api/press?ch=1..4` | Same as pressing the physical button: explicit `SET nn AUDIO_MUTE ON/OFF` (or `GET` if unknown). 503 if not connected. |
 | POST | `/api/ip?ip=x.x.x.x` | Sets the amp IP **in RAM only** (lost on reboot) and reconnects |
 
 The web press follows the same rule as the buttons: the state changes only
@@ -132,12 +143,14 @@ pio device monitor -b 115200 # serial log
 
 ## Behaviour rules (keep these true)
 
-1. **The amp is the source of truth.** On a button press, send `SET ... TOGGLE`
-   (or ON/OFF) and do **not** change the LED until the amp sends back a `REP`.
+1. **The amp is the source of truth.** On a button press, send an explicit
+   `SET nn AUDIO_MUTE ON|OFF` (never `TOGGLE`) and do **not** change the LED
+   until the amp sends back a `REP`. If the state is unknown, send only a `GET`.
 2. On (re)connect, send `< GET 00 AUDIO_MUTE >` (or `< GET 0 ALL >`) to sync all LEDs.
 3. Parse every incoming `REP` line, including ones the ESP32 did not request.
 4. Keep the TCP connection open. Reconnect with backoff if it drops. While
-   disconnected, all LEDs slow-blink so the user knows the controls are dead.
+   disconnected, every zone goes back to unknown, green LEDs go off, and all red
+   LEDs blink together so the user knows the controls are dead.
 5. Debounce buttons (~30–50 ms). Act on the press edge only, and never on
    hold or auto-repeat.
 6. Nothing in `loop()` may block for long. Use a non-blocking socket read

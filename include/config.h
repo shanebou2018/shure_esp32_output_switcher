@@ -29,8 +29,9 @@ constexpr int kOutputChannel[kNumZones] = {6, 7, 8, 9};
 // ---- Pins (generic ESP32 DevKit) ----
 // Buttons: momentary to GND, internal pull-up, active LOW.
 constexpr uint8_t kButtonPin[kNumZones] = {32, 33, 25, 26};
-// LEDs: via 220-470 ohm resistor to GND, HIGH = on.
-constexpr uint8_t kLedPin[kNumZones] = {16, 17, 18, 19};
+// LEDs: via 220-470 ohm resistor to GND, HIGH = on. Two per zone.
+constexpr uint8_t kGreenLedPin[kNumZones] = {16, 17, 18, 19};  // unmuted
+constexpr uint8_t kRedLedPin[kNumZones] = {21, 22, 23, 27};    // muted
 
 // ---- Timing ----
 constexpr uint32_t kDebounceMs = 40;
@@ -38,4 +39,4 @@ constexpr uint32_t kConnectTimeoutMs = 500;
 constexpr uint32_t kReconnectMinMs = 1000;
 constexpr uint32_t kReconnectMaxMs = 30000;
 constexpr uint32_t kPollIntervalMs = 30000;  // periodic resync, also detects dead links
-constexpr uint32_t kBlinkPeriodMs = 1000;    // LED blink while disconnected
+constexpr uint32_t kBlinkPeriodMs = 1000;    // red LED blink while disconnected

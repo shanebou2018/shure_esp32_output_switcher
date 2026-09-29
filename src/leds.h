@@ -1,7 +1,10 @@
 #pragma once
 
+#include "zone_state.h"
+
 void ledsBegin();
 
-// connected: link to the amp is up. on[i]: zone i output is unmuted.
-// While disconnected all LEDs blink together.
-void ledsUpdate(bool connected, const bool on[]);
+// Each zone has a green (unmuted) and a red (muted) LED:
+//   unmuted -> green on          muted -> red on
+//   unknown -> both off          link to amp down -> all red LEDs blink
+void ledsUpdate(bool connected, const ZoneState states[]);

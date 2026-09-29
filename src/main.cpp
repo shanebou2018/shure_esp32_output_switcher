@@ -49,8 +49,8 @@ void loop() {
   amp.loop();
 
   const int zone = buttonsPoll();
-  if (zone >= 0) amp.toggleZone(zone);
+  if (zone >= 0) amp.pressZone(zone);
 
   webLoop();
-  ledsUpdate(amp.connected(), amp.zoneOn());
+  ledsUpdate(amp.connected(), amp.zoneStates());
 }

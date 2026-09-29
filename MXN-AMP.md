@@ -54,7 +54,7 @@
 | **Channel mute state** | `< GET nn AUDIO_MUTE >` | `< REP nn AUDIO_MUTE ON\|OFF >` | ☐ |
 | **Mute channel** | `< SET nn AUDIO_MUTE ON >` | `< REP nn AUDIO_MUTE ON >` | ☐ |
 | **Unmute channel** | `< SET nn AUDIO_MUTE OFF >` | `< REP nn AUDIO_MUTE OFF >` | ☐ |
-| **Toggle channel** | `< SET nn AUDIO_MUTE TOGGLE >` | `< REP nn AUDIO_MUTE ON\|OFF >` | ☐ |
+| Toggle channel (**not used**: the firmware sends explicit ON/OFF) | `< SET nn AUDIO_MUTE TOGGLE >` | `< REP nn AUDIO_MUTE ON\|OFF >` | ☐ |
 | Device (master) mute | `< SET DEVICE_AUDIO_MUTE ON\|OFF\|TOGGLE >` | `< REP DEVICE_AUDIO_MUTE ... >` | ☐ |
 | Channel gain | `< GET nn AUDIO_GAIN_HI_RES >` | `< REP nn AUDIO_GAIN_HI_RES 1100 >` | ☐ |
 | Set gain | `< SET nn AUDIO_GAIN_HI_RES 0000–1400 >` | as above | ☐ |
@@ -71,8 +71,9 @@ Gain scaling (Shure convention): `AUDIO_GAIN_HI_RES` runs from `0000` to
 > are channels **06–09** (zone 1 = 06 ... zone 4 = 09). The lower numbers are
 > inputs, so never mute those from the switcher.
 >
-> **Still check on the official page:** (b) whether
-> `TOGGLE` is supported, (c) whether a matrix/routing command exists
+> **Still check on the amp:** (b) that `SET nn AUDIO_MUTE ON/OFF` gets a `REP`
+> back every time, even when the value doesn't change (the LEDs depend on
+> it), (c) whether a matrix/routing command exists
 > (`MATRIX_MXR_ROUTE` / `MATRIX_MXR_GAIN` on other Shure DSPs). If there is
 > one, "switch output" could mean routing a source to an output instead of
 > muting it.
@@ -86,10 +87,10 @@ AMP   → < REP 01 AUDIO_MUTE OFF >        # input channels: ignored
 AMP   → < REP 06 AUDIO_MUTE OFF >
 AMP   → < REP 07 AUDIO_MUTE ON >
 AMP   → < REP 08 AUDIO_MUTE ON >
-AMP   → < REP 09 AUDIO_MUTE OFF >        # LEDs: 1 on, 2 off, 3 off, 4 on
-[user presses button 2]
-ESP32 → < SET 07 AUDIO_MUTE TOGGLE >
-AMP   → < REP 07 AUDIO_MUTE OFF >        # LED 2 turns on now
+AMP   → < REP 09 AUDIO_MUTE OFF >        # LEDs: 1 green, 2 red, 3 red, 4 green
+[user presses button 2; zone 2 was reported muted, so send an explicit unmute]
+ESP32 → < SET 07 AUDIO_MUTE OFF >
+AMP   → < REP 07 AUDIO_MUTE OFF >        # now zone 2 goes red -> green
 ```
 
 ### Quick test from a laptop (before writing firmware)
@@ -97,7 +98,8 @@ AMP   → < REP 07 AUDIO_MUTE OFF >        # LED 2 turns on now
 ```bash
 nc <amp-ip> 2202
 < GET 0 ALL >
-< SET 01 AUDIO_MUTE TOGGLE >
+< SET 06 AUDIO_MUTE ON >
+< SET 06 AUDIO_MUTE OFF >
 ```
 
 ## 3. Dante: what it can and cannot do here

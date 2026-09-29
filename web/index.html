@@ -8,7 +8,8 @@
   :root {
     --bg: #f3f4f6; --panel: #ffffff; --text: #111827; --muted: #6b7280;
     --border: #d1d5db; --btn: #e5e7eb; --btn-press: #d1d5db;
-    --led-off: #9ca3af; --led-on: #22c55e; --led-glow: rgba(34,197,94,.55);
+    --led-off: #9ca3af; --green: #22c55e; --green-glow: rgba(34,197,94,.55);
+    --red: #ef4444; --red-glow: rgba(239,68,68,.55);
     --ok: #15803d; --warn: #b45309; --accent: #2563eb;
     --log-bg: #f9fafb;
   }
@@ -16,7 +17,8 @@
     :root {
       --bg: #0f1115; --panel: #1a1d23; --text: #e5e7eb; --muted: #9ca3af;
       --border: #2d323b; --btn: #262a31; --btn-press: #333844;
-      --led-off: #3a3f48; --led-on: #4ade80; --led-glow: rgba(74,222,128,.5);
+      --led-off: #3a3f48; --green: #4ade80; --green-glow: rgba(74,222,128,.5);
+      --red: #f87171; --red-glow: rgba(248,113,113,.5);
       --ok: #4ade80; --warn: #fbbf24; --accent: #60a5fa;
       --log-bg: #13161b;
     }
@@ -61,15 +63,17 @@
   }
   .ch:active { background: var(--btn-press); transform: translateY(1px); }
   .ch:disabled { cursor: not-allowed; opacity: .7; }
+  .leds { display: flex; gap: 10px; }
   .led {
-    width: 22px; height: 22px; border-radius: 50%;
+    width: 20px; height: 20px; border-radius: 50%;
     background: var(--led-off); transition: background .12s, box-shadow .12s;
   }
-  .led.on { background: var(--led-on); box-shadow: 0 0 12px 3px var(--led-glow); }
+  .led.green.on { background: var(--green); box-shadow: 0 0 12px 3px var(--green-glow); }
+  .led.red.on { background: var(--red); box-shadow: 0 0 12px 3px var(--red-glow); }
   .led.pending { animation: pend .3s ease-in-out infinite alternate; }
-  .led.blink { animation: blink 1s steps(1) infinite; }
+  .led.red.blink { animation: blink 1s steps(1) infinite; }
   @keyframes pend { to { opacity: .45; } }
-  @keyframes blink { 50% { background: var(--led-on); box-shadow: 0 0 12px 3px var(--led-glow); } }
+  @keyframes blink { 50% { background: var(--red); box-shadow: 0 0 12px 3px var(--red-glow); } }
   .ch b { font-size: 14px; }
   .ch small { font-size: 12px; color: var(--muted); }
   .log {
@@ -88,7 +92,7 @@
 <body>
 <main>
   <h1>MXN-AMP Output Switcher</h1>
-  <p class="sub">Four latching outputs. Each LED shows the state the amp reports: lit means the output is on (unmuted).</p>
+  <p class="sub">Four latching outputs. The LEDs show what the amp reports: green = unmuted, red = muted, both dark = not known yet.</p>
 
   <section class="panel">
     <label for="ip">Amp IP address</label>
@@ -120,8 +124,9 @@
 /*
  * Two modes:
  *  - Live: page is served by the ESP32, which exposes
- *      GET  /api/state            -> {"ampIp":"x.x.x.x","connected":true,"outputs":[true,false,true,false],"log":["..."]}
- *      POST /api/press?ch=1..4    -> toggles that output on the amp
+ *      GET  /api/state            -> {"ampIp":"x.x.x.x","connected":true,"outputs":[true,false,null,false],"log":["..."],"logTotal":n}
+ *                                    outputs: true = unmuted, false = muted, null = unknown
+ *      POST /api/press?ch=1..4    -> sends explicit mute/unmute (opposite of the reported state)
  *      POST /api/ip?ip=x.x.x.x    -> temporary amp IP (RAM only), reconnects
  *  - Simulation: /api/state is not reachable (e.g. opened as a local file),
  *    so a fake amp in this page answers with Shure REP strings.
@@ -134,7 +139,7 @@ const ipRe = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]
 
 let live = false;
 let connected = false;
-let outputs = [false, false, false, false];   // true = unmuted = LED on
+let outputs = [null, null, null, null];   // true = unmuted (green), false = muted (red), null = unknown
 let pending = [false, false, false, false];
 const pressedAt = [0, 0, 0, 0];
 const leds = [];
@@ -144,7 +149,8 @@ function buildGrid() {
   for (let i = 0; i < CHANNELS; i++) {
     const b = document.createElement('button');
     b.className = 'ch';
-    b.innerHTML = `<span class="led"></span><b>Output ${i + 1}</b><small>Off</small>`;
+    b.innerHTML = `<span class="leds"><span class="led green"></span><span class="led red"></span></span>` +
+      `<b>Output ${i + 1}</b><small>—</small>`;
     b.addEventListener('click', () => press(i + 1));
     $('grid').appendChild(b);
     leds.push(b);
@@ -157,11 +163,12 @@ function render() {
   c.className = 'pill ' + (connected ? 'ok' : 'warn');
   $('mode').textContent = live ? 'Live (ESP32)' : 'Simulation';
   leds.forEach((b, i) => {
-    const led = b.querySelector('.led');
-    led.className = 'led' +
-      (!connected ? ' blink' : outputs[i] ? ' on' : '') +
-      (connected && pending[i] ? ' pending' : '');
-    b.querySelector('small').textContent = !connected ? '—' : outputs[i] ? 'On' : 'Off';
+    const pend = connected && pending[i] ? ' pending' : '';
+    b.querySelector('.green').className = 'led green' + (connected && outputs[i] === true ? ' on' + pend : '');
+    b.querySelector('.red').className = 'led red' +
+      (!connected ? ' blink' : outputs[i] === false ? ' on' + pend : '');
+    b.querySelector('small').textContent =
+      !connected || outputs[i] === null ? '—' : outputs[i] ? 'Unmuted' : 'Muted';
     b.disabled = !connected;
   });
 }
@@ -195,18 +202,22 @@ const sim = {
     log(cmd, 'tx');
     setTimeout(() => {
       let m;
+      const rep = (i) => handleRep(`< REP ${chStr(OUTPUT_CH[i])} AUDIO_MUTE ${this.mutes[i] ? 'ON' : 'OFF'} >`);
       if ((m = cmd.match(/<\s*GET\s+00\s+AUDIO_MUTE\s*>/))) {
-        this.mutes.forEach((v, i) => handleRep(`< REP ${chStr(OUTPUT_CH[i])} AUDIO_MUTE ${v ? 'ON' : 'OFF'} >`));
-      } else if ((m = cmd.match(/<\s*SET\s+(\d{2})\s+AUDIO_MUTE\s+TOGGLE\s*>/))) {
+        this.mutes.forEach((_, i) => rep(i));
+      } else if ((m = cmd.match(/<\s*GET\s+(\d{2})\s+AUDIO_MUTE\s*>/))) {
+        const i = OUTPUT_CH.indexOf(parseInt(m[1], 10));
+        if (i >= 0) rep(i);
+      } else if ((m = cmd.match(/<\s*SET\s+(\d{2})\s+AUDIO_MUTE\s+(ON|OFF)\s*>/))) {
         const i = OUTPUT_CH.indexOf(parseInt(m[1], 10));
         if (i < 0) return;
-        this.mutes[i] = !this.mutes[i];
-        handleRep(`< REP ${m[1]} AUDIO_MUTE ${this.mutes[i] ? 'ON' : 'OFF'} >`);
+        this.mutes[i] = m[2] === 'ON';
+        rep(i);
       }
     }, 120 + Math.random() * 180);   // fake network round trip
   },
   connect(ip) {
-    connected = false; render();
+    connected = false; outputs = outputs.map(() => null); render();
     log(`Connecting to ${ip}:2202 …`, 'sys');
     setTimeout(() => {
       connected = true;
@@ -224,7 +235,7 @@ async function poll() {
     const r = await fetch('/api/state', { cache: 'no-store' });
     const s = await r.json();
     connected = !!s.connected;
-    const next = s.outputs.map(Boolean);
+    const next = s.outputs.map((v) => (v === null ? null : !!v));
     // Keep the "waiting" pulse until the amp's reply changes the state (or 2 s pass).
     pending = pending.map((p, i) => p && connected && next[i] === outputs[i] && Date.now() - pressedAt[i] < 2000);
     outputs = next;
@@ -248,7 +259,11 @@ async function press(ch) {
   pending[ch - 1] = true;
   pressedAt[ch - 1] = Date.now();   // LED waits for the amp's REP (behaviour rule 1)
   render();
-  const cmd = `< SET ${chStr(OUTPUT_CH[ch - 1])} AUDIO_MUTE TOGGLE >`;
+  // Explicit command from the state the amp last reported (same rule as the firmware).
+  const c = chStr(OUTPUT_CH[ch - 1]);
+  const state = outputs[ch - 1];
+  const cmd = state === null ? `< GET ${c} AUDIO_MUTE >`
+            : `< SET ${c} AUDIO_MUTE ${state ? 'ON' : 'OFF'} >`;
   if (live) {
     try { await fetch(`/api/press?ch=${ch}`, { method: 'POST' }); } catch (e) {}
     poll();
