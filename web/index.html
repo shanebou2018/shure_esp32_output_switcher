@@ -63,15 +63,14 @@
   }
   .ch:active { background: var(--btn-press); transform: translateY(1px); }
   .ch:disabled { cursor: not-allowed; opacity: .7; }
-  .leds { display: flex; gap: 10px; }
   .led {
     width: 20px; height: 20px; border-radius: 50%;
     background: var(--led-off); transition: background .12s, box-shadow .12s;
   }
-  .led.green.on { background: var(--green); box-shadow: 0 0 12px 3px var(--green-glow); }
-  .led.red.on { background: var(--red); box-shadow: 0 0 12px 3px var(--red-glow); }
+  .led.green { background: var(--green); box-shadow: 0 0 12px 3px var(--green-glow); }
+  .led.red { background: var(--red); box-shadow: 0 0 12px 3px var(--red-glow); }
   .led.pending { animation: pend .3s ease-in-out infinite alternate; }
-  .led.red.blink { animation: blink 1s steps(1) infinite; }
+  .led.blink { animation: blink 1s steps(1) infinite; }
   @keyframes pend { to { opacity: .45; } }
   @keyframes blink { 50% { background: var(--red); box-shadow: 0 0 12px 3px var(--red-glow); } }
   .ch b { font-size: 14px; }
@@ -92,7 +91,7 @@
 <body>
 <main>
   <h1>MXN-AMP Output Switcher</h1>
-  <p class="sub">Four latching outputs. The LEDs show what the amp reports: green = unmuted, red = muted, both dark = not known yet.</p>
+  <p class="sub">Four latching outputs. Each output has one RGB LED showing what the amp reports: green = unmuted, red = muted, dark = not known yet.</p>
 
   <section class="panel">
     <label for="ip">Amp IP address</label>
@@ -149,7 +148,7 @@ function buildGrid() {
   for (let i = 0; i < CHANNELS; i++) {
     const b = document.createElement('button');
     b.className = 'ch';
-    b.innerHTML = `<span class="leds"><span class="led green"></span><span class="led red"></span></span>` +
+    b.innerHTML = `<span class="led"></span>` +
       `<b>Output ${i + 1}</b><small>—</small>`;
     b.addEventListener('click', () => press(i + 1));
     $('grid').appendChild(b);
@@ -164,9 +163,9 @@ function render() {
   $('mode').textContent = live ? 'Live (ESP32)' : 'Simulation';
   leds.forEach((b, i) => {
     const pend = connected && pending[i] ? ' pending' : '';
-    b.querySelector('.green').className = 'led green' + (connected && outputs[i] === true ? ' on' + pend : '');
-    b.querySelector('.red').className = 'led red' +
-      (!connected ? ' blink' : outputs[i] === false ? ' on' + pend : '');
+    // One RGB pixel per zone, same colours as the WS2811 on the panel.
+    b.querySelector('.led').className = 'led' +
+      (!connected ? ' blink' : outputs[i] === true ? ' green' + pend : outputs[i] === false ? ' red' + pend : '');
     b.querySelector('small').textContent =
       !connected || outputs[i] === null ? '—' : outputs[i] ? 'Unmuted' : 'Muted';
     b.disabled = !connected;

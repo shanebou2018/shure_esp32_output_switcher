@@ -6,7 +6,7 @@ Guidance for Claude Code when working in this repository.
 
 An ESP32 wall/desk controller that switches the outputs of a **Shure MXN-AMP**
 (PoE+ powered 4-channel Dante amplifier) using **4 push buttons** with
-**8 LEDs** (a green and a red per zone) for latching feedback.
+**4 WS2811 RGB pixels** (one per switch, chained on one data pin) for latching feedback.
 
 - Each button is paired with one amplifier output channel (zone 1–4 → amp output 06–09).
 - Pressing a button flips (latches) that output between muted and unmuted.
@@ -19,12 +19,12 @@ An ESP32 wall/desk controller that switches the outputs of a **Shure MXN-AMP**
   - State not known yet → `< GET nn AUDIO_MUTE >` only. Never guess.
 - LEDs must match the amp **100%**. They show only what the amp reported:
 
-  | Amp state | Green LED | Red LED |
-  |---|---|---|
-  | Unmuted | on | off |
-  | Muted | off | on |
-  | Not known yet (just connected) | off | off |
-  | ESP32 not connected to the amp | off | all blink together |
+  | Amp state | Zone's WS2811 pixel |
+  |---|---|
+  | Unmuted | green |
+  | Muted | red |
+  | Not known yet (just connected) | off |
+  | ESP32 not connected to the amp | all four blink red together |
 
 - If the amp changes state from elsewhere (Designer, web UI, another
   controller), the LEDs follow it.
@@ -60,18 +60,22 @@ Source (Dante) ──► MXN-AMP Dante input 1 ──┬──► Amp output 1 �
 |---|---|
 | MCU | **Generic ESP32 DevKit (esp32dev) over Wi-Fi** (decided). |
 | Buttons | 4 momentary push buttons, wired to GND, using the internal pull-up (`INPUT_PULLUP`), active LOW. |
-| LEDs | 8 LEDs: 4 green (unmuted) + 4 red (muted), each with its own series resistor (~220–470 Ω) to GND, driven HIGH = on. |
+| LEDs | 4 **WS2811** RGB pixels, one per switch, daisy-chained on one data pin (DIN of pixel 1 ← GPIO 16, DOUT → DIN of the next). Pixel 1 = zone 1. Power them from their own 5 V or 12 V supply (to match the pixels), with the **ground shared** with the ESP32. Put a ~330 Ω resistor in series with the data line. The ESP32's 3.3 V data usually drives WS2811s over short runs; add a 74AHCT125 level shifter if they flicker. |
 | Network | The Wi-Fi network must be able to reach the MXN-AMP **control** IP on TCP 2202. |
 
 Pin map (`MXN_AMP_Switcher/config.h`). These pins all have internal pull-ups and avoid
 the strapping pins (0, 2, 5, 12, 15) and the flash pins (6–11):
 
-| Zone | Amp output | Button GPIO | Green LED GPIO | Red LED GPIO |
-|---|---|---|---|---|
-| 1 | 06 | 32 | 16 | 21 |
-| 2 | 07 | 33 | 17 | 22 |
-| 3 | 08 | 25 | 18 | 23 |
-| 4 | 09 | 26 | 19 | 27 |
+| Zone | Amp output | Button GPIO | WS2811 pixel |
+|---|---|---|---|
+| 1 | 06 | 32 | 1st on chain |
+| 2 | 07 | 33 | 2nd |
+| 3 | 08 | 25 | 3rd |
+| 4 | 09 | 26 | 4th |
+
+WS2811 data: **GPIO 16** (`kLedDataPin`). Colour order and speed are set by
+`LED_PIXEL_TYPE` in `config.h` (default `NEO_RGB + NEO_KHZ800`). If muted shows
+green and unmuted shows red, switch it to `NEO_GRB`.
 
 ## Wi-Fi credentials
 
@@ -90,8 +94,8 @@ the strapping pins (0, 2, 5, 12, 15) and the flash pins (6–11):
 - **Arduino IDE** (decided: no PlatformIO). The firmware is one sketch folder,
   `MXN_AMP_Switcher/`. The IDE compiles every `.ino`, `.cpp` and `.h` in it.
 - Board package: **esp32 by Espressif** (Boards Manager). Board: **ESP32 Dev Module**.
-- **No extra libraries.** `WiFi`, `WiFiClient`, `WebServer` and `ESPmDNS` all
-  ship with the ESP32 board package.
+- **One extra library: Adafruit NeoPixel** (Library Manager) drives the WS2811 pixels.
+  `WiFi`, `WiFiClient`, `WebServer` and `ESPmDNS` ship with the ESP32 board package.
 - The web page is compiled in from `index_html.h`, which is **generated** from
   `web/index.html`. After editing the page, run `python3 tools/embed_web.py`
   and commit both files. Never hand-edit `index_html.h`.
@@ -107,7 +111,7 @@ MXN_AMP_Switcher/
   shure_client.*        # TCP connection, send/parse Shure command strings, reconnect
   buttons.*             # debounced edge detection for 4 buttons
   zone_state.h          # ZoneState: kUnknown / kMuted / kUnmuted
-  leds.*                # green/red LED output + "no connection" blink pattern
+  leds.*                # WS2811 pixel colours + "no connection" blink (Adafruit NeoPixel)
   web.*                 # HTTP server: serves the page + /api/* endpoints
   index_html.h          # GENERATED from web/index.html by tools/embed_web.py
 web/index.html          # control page source (opens standalone in simulation mode)
@@ -119,7 +123,7 @@ MXN-AMP.md              # Shure MXN-AMP + Dante API reference notes
 
 A single self-contained HTML file with no external dependencies. The ESP32
 serves it at `/`. It lets someone temporarily change the amp IP, press the
-4 outputs, and see the LEDs mirror the amp's state, plus a log of the Shure
+4 outputs, and see one LED per output mirror the amp's state (same colours as the pixels), plus a log of the Shure
 strings sent and received.
 
 - **Simulation mode:** if `/api/state` cannot be reached (for example when
@@ -143,7 +147,8 @@ when the amp's `REP` comes back.
 
 1. One-time setup: in **File → Preferences → Additional boards manager URLs**,
    add `https://espressif.github.io/arduino-esp32/package_esp32_index.json`.
-   Then in **Tools → Board → Boards Manager**, install **esp32 by Espressif Systems**.
+   Then in **Tools → Board → Boards Manager**, install **esp32 by Espressif Systems**,
+   and in **Tools → Manage Libraries**, install **Adafruit NeoPixel**.
 2. Open `MXN_AMP_Switcher/MXN_AMP_Switcher.ino`.
 3. Copy `secrets.example.h` to `secrets.h` in the same folder and fill in the Wi-Fi credentials.
 4. **Tools → Board → esp32 → ESP32 Dev Module**, and select the USB port.
@@ -158,8 +163,8 @@ when the amp's `REP` comes back.
 2. On (re)connect, send `< GET 00 AUDIO_MUTE >` (or `< GET 0 ALL >`) to sync all LEDs.
 3. Parse every incoming `REP` line, including ones the ESP32 did not request.
 4. Keep the TCP connection open. Reconnect with backoff if it drops. While
-   disconnected, every zone goes back to unknown, green LEDs go off, and all red
-   LEDs blink together so the user knows the controls are dead.
+   disconnected, every zone goes back to unknown and all four pixels blink red
+   together so the user knows the controls are dead.
 5. Debounce buttons (~30–50 ms). Act on the press edge only, and never on
    hold or auto-repeat.
 6. Nothing in `loop()` may block for long. Use a non-blocking socket read
