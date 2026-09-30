@@ -3,10 +3,8 @@
 #include <WebServer.h>
 
 #include "config.h"
+#include "index_html.h"  // kIndexHtml, generated from web/index.html
 #include "shure_client.h"
-
-// web/index.html, embedded by board_build.embed_txtfiles (NUL-terminated).
-extern const char indexHtml[] asm("_binary_web_index_html_start");
 
 namespace {
 
@@ -81,7 +79,7 @@ void handleIp() {
 
 void webBegin(ShureClient& a) {
   amp = &a;
-  server.on("/", HTTP_GET, [] { server.send(200, "text/html", indexHtml); });
+  server.on("/", HTTP_GET, [] { server.send(200, "text/html", kIndexHtml); });
   server.on("/api/state", HTTP_GET, handleState);
   server.on("/api/press", HTTP_POST, handlePress);
   server.on("/api/ip", HTTP_POST, handleIp);

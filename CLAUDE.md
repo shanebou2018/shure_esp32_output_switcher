@@ -63,7 +63,7 @@ Source (Dante) ──► MXN-AMP Dante input 1 ──┬──► Amp output 1 �
 | LEDs | 8 LEDs: 4 green (unmuted) + 4 red (muted), each with its own series resistor (~220–470 Ω) to GND, driven HIGH = on. |
 | Network | The Wi-Fi network must be able to reach the MXN-AMP **control** IP on TCP 2202. |
 
-Pin map (`include/config.h`). These pins all have internal pull-ups and avoid
+Pin map (`MXN_AMP_Switcher/config.h`). These pins all have internal pull-ups and avoid
 the strapping pins (0, 2, 5, 12, 15) and the flash pins (6–11):
 
 | Zone | Amp output | Button GPIO | Green LED GPIO | Red LED GPIO |
@@ -75,9 +75,9 @@ the strapping pins (0, 2, 5, 12, 15) and the flash pins (6–11):
 
 ## Wi-Fi credentials
 
-- They live in `include/secrets.h`, which is **git-ignored because the repo
-  is public**. Copy `include/secrets.example.h` to `include/secrets.h` and
-  set `WIFI_SSID` / `WIFI_PASSWORD`. The current site uses SSID `Sound`; the
+- They live in `MXN_AMP_Switcher/secrets.h`, which is **git-ignored because
+  the repo is public**. In the sketch folder, copy `secrets.example.h` to
+  `secrets.h` and set `WIFI_SSID` / `WIFI_PASSWORD`. The current site uses SSID `Sound`; the
   password is in your local file only.
 - If `secrets.h` is missing, the build warns and uses placeholders.
 - Planned: make the SSID/password changeable at runtime (web page + NVS
@@ -87,25 +87,31 @@ the strapping pins (0, 2, 5, 12, 15) and the flash pins (6–11):
 
 ## Software stack
 
-- **PlatformIO** + **Arduino framework** for ESP32 (`platformio.ini` at repo root).
-- Networking: `WiFi.h`, `WiFiClient` for the TCP socket to the amp, `WebServer` for the page, `ESPmDNS`.
-- `web/index.html` is embedded in flash through `board_build.embed_txtfiles` (symbol `_binary_web_index_html_start`). Edit the HTML file directly; no conversion step.
-- No heavy dependencies. Debounce and the parsing of command strings are done
-  in plain code in this project.
+- **Arduino IDE** (decided: no PlatformIO). The firmware is one sketch folder,
+  `MXN_AMP_Switcher/`. The IDE compiles every `.ino`, `.cpp` and `.h` in it.
+- Board package: **esp32 by Espressif** (Boards Manager). Board: **ESP32 Dev Module**.
+- **No extra libraries.** `WiFi`, `WiFiClient`, `WebServer` and `ESPmDNS` all
+  ship with the ESP32 board package.
+- The web page is compiled in from `index_html.h`, which is **generated** from
+  `web/index.html`. After editing the page, run `python3 tools/embed_web.py`
+  and commit both files. Never hand-edit `index_html.h`.
+- Debounce and the parsing of command strings are done in plain code in this project.
 
-Planned layout:
+Layout:
 
 ```
-platformio.ini
-include/config.h        # pins, amp IP/port, zone->amp output channel map, timings
-include/secrets.h       # git-ignored Wi-Fi creds; copy from secrets.example.h
-src/main.cpp            # setup/loop, wiring the modules together
-src/shure_client.*      # TCP connection, send/parse Shure command strings, reconnect
-src/buttons.*           # debounced edge detection for 4 buttons
-src/zone_state.h        # ZoneState: kUnknown / kMuted / kUnmuted
-src/leds.*              # green/red LED output + "no connection" blink pattern
-src/web.*               # HTTP server: serves web/index.html + /api/* endpoints
-web/index.html          # simple control page (also runs standalone in simulation mode)
+MXN_AMP_Switcher/
+  MXN_AMP_Switcher.ino  # setup/loop, wiring the modules together
+  config.h              # pins, amp IP/port, zone->amp output channel map, timings
+  secrets.example.h     # template; copy to secrets.h (git-ignored) for Wi-Fi creds
+  shure_client.*        # TCP connection, send/parse Shure command strings, reconnect
+  buttons.*             # debounced edge detection for 4 buttons
+  zone_state.h          # ZoneState: kUnknown / kMuted / kUnmuted
+  leds.*                # green/red LED output + "no connection" blink pattern
+  web.*                 # HTTP server: serves the page + /api/* endpoints
+  index_html.h          # GENERATED from web/index.html by tools/embed_web.py
+web/index.html          # control page source (opens standalone in simulation mode)
+tools/embed_web.py      # regenerates index_html.h
 MXN-AMP.md              # Shure MXN-AMP + Dante API reference notes
 ```
 
@@ -125,7 +131,7 @@ HTTP API the firmware must implement (keep it in sync with the page):
 
 | Method | Path | Behaviour |
 |---|---|---|
-| GET | `/` | Serves `web/index.html` (embedded in flash) |
+| GET | `/` | Serves the page (`kIndexHtml` from `index_html.h`) |
 | GET | `/api/state` | `{"ampIp":"x.x.x.x","connected":bool,"outputs":[true|false|null ×4],"log":["..."],"logTotal":n}`. `outputs[i]`: true = unmuted, false = muted, null = not known. `log` holds the recent command lines, and `logTotal` counts every line ever logged. |
 | POST | `/api/press?ch=1..4` | Same as pressing the physical button: explicit `SET nn AUDIO_MUTE ON/OFF` (or `GET` if unknown). 503 if not connected. |
 | POST | `/api/ip?ip=x.x.x.x` | Sets the amp IP **in RAM only** (lost on reboot) and reconnects |
@@ -133,13 +139,16 @@ HTTP API the firmware must implement (keep it in sync with the page):
 The web press follows the same rule as the buttons: the state changes only
 when the amp's `REP` comes back.
 
-## Build / flash / monitor
+## Build / flash / monitor (Arduino IDE)
 
-```bash
-pio run                      # build
-pio run -t upload            # flash
-pio device monitor -b 115200 # serial log
-```
+1. One-time setup: in **File → Preferences → Additional boards manager URLs**,
+   add `https://espressif.github.io/arduino-esp32/package_esp32_index.json`.
+   Then in **Tools → Board → Boards Manager**, install **esp32 by Espressif Systems**.
+2. Open `MXN_AMP_Switcher/MXN_AMP_Switcher.ino`.
+3. Copy `secrets.example.h` to `secrets.h` in the same folder and fill in the Wi-Fi credentials.
+4. **Tools → Board → esp32 → ESP32 Dev Module**, and select the USB port.
+5. Click **Upload**.
+6. Open **Tools → Serial Monitor** at **115200** baud to see the IP address and the amp log.
 
 ## Behaviour rules (keep these true)
 
@@ -160,6 +169,6 @@ pio device monitor -b 115200 # serial log
 ## Conventions
 
 - C++17, 2-space indent, `camelCase` functions, `kConstant` constants.
-- Keep IPs and credentials out of git (`include/secrets.h` is ignored).
+- Keep IPs and credentials out of git (`MXN_AMP_Switcher/secrets.h` is ignored).
 - Any Shure command added to the code must also be recorded in `MXN-AMP.md`,
   and marked as checked against the official command-string page.

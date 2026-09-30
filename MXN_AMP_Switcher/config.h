@@ -5,7 +5,7 @@
 #if __has_include("secrets.h")
 #include "secrets.h"
 #else
-#warning "include/secrets.h not found, using placeholder Wi-Fi credentials from secrets.example.h"
+#warning "secrets.h not found, using placeholder Wi-Fi credentials from secrets.example.h"
 #include "secrets.example.h"
 #endif
 
