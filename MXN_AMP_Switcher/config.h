@@ -10,12 +10,12 @@
 #endif
 
 // ---- Network ----
-constexpr const char* kWifiSsid = WIFI_SSID;
-constexpr const char* kWifiPassword = WIFI_PASSWORD;
+constexpr const char* kWifiSsid = "RDA WIFI";
+constexpr const char* kWifiPassword = "RichardDean1";
 constexpr const char* kHostname = "mxn-switcher";  // http://mxn-switcher.local/
 
 // Default amp control IP. Can be changed temporarily from the web page (RAM only).
-constexpr const char* kDefaultAmpIp = "192.168.1.50";
+constexpr const char* kDefaultAmpIp = "10.0.1.142";
 constexpr uint16_t kAmpPort = 2202;
 
 // ---- Zones ----
