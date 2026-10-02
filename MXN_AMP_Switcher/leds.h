@@ -4,7 +4,7 @@
 
 void ledsBegin();
 
-// Each zone has a green (unmuted) and a red (muted) LED:
-//   unmuted -> green on          muted -> red on
-//   unknown -> both off          link to amp down -> all red LEDs blink
+// One WS2811 RGB pixel per zone:
+//   unmuted -> green      muted -> red      unknown -> off
+//   link to amp down -> all pixels blink red together
 void ledsUpdate(bool connected, const ZoneState states[]);
