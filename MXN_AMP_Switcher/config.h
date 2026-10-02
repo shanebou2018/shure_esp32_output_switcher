@@ -31,7 +31,7 @@ constexpr int kOutputChannel[kNumZones] = {6, 7, 8, 9};
 constexpr uint8_t kButtonPin[kNumZones] = {32, 33, 25, 26};
 // LEDs: one WS2811 RGB pixel per zone, chained on a single data pin.
 // Pixel 0 = zone 1 ... pixel 3 = zone 4 (first pixel on the chain = zone 1).
-constexpr uint8_t kLedDataPin = 16;
+constexpr uint8_t kLedDataPin = 27;
 constexpr uint8_t kLedBrightness = 80;  // 0-255
 // WS2811 pixels are usually RGB order at 800 kHz. If "unmuted" shows red and
 // "muted" shows green, change NEO_RGB to NEO_GRB. Some older WS2811 parts

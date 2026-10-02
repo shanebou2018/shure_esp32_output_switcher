@@ -60,7 +60,7 @@ Source (Dante) ──► MXN-AMP Dante input 1 ──┬──► Amp output 1 �
 |---|---|
 | MCU | **Generic ESP32 DevKit (esp32dev) over Wi-Fi** (decided). |
 | Buttons | 4 momentary push buttons, wired to GND, using the internal pull-up (`INPUT_PULLUP`), active LOW. |
-| LEDs | 4 **WS2811** RGB pixels, one per switch, daisy-chained on one data pin (DIN of pixel 1 ← GPIO 16, DOUT → DIN of the next). Pixel 1 = zone 1. Power them from their own 5 V or 12 V supply (to match the pixels), with the **ground shared** with the ESP32. Put a ~330 Ω resistor in series with the data line. The ESP32's 3.3 V data usually drives WS2811s over short runs; add a 74AHCT125 level shifter if they flicker. |
+| LEDs | 4 **WS2811** RGB pixels, one per switch, daisy-chained on one data pin (DIN of pixel 1 ← GPIO 27, DOUT → DIN of the next). Pixel 1 = zone 1. Power them from their own 5 V or 12 V supply (to match the pixels), with the **ground shared** with the ESP32. Put a ~330 Ω resistor in series with the data line. The ESP32's 3.3 V data usually drives WS2811s over short runs; add a 74AHCT125 level shifter if they flicker. |
 | Network | The Wi-Fi network must be able to reach the MXN-AMP **control** IP on TCP 2202. |
 
 Pin map (`MXN_AMP_Switcher/config.h`). These pins all have internal pull-ups and avoid
@@ -73,7 +73,7 @@ the strapping pins (0, 2, 5, 12, 15) and the flash pins (6–11):
 | 3 | 08 | 25 | 3rd |
 | 4 | 09 | 26 | 4th |
 
-WS2811 data: **GPIO 16** (`kLedDataPin`). Colour order and speed are set by
+WS2811 data: **GPIO 27** (`kLedDataPin`). Colour order and speed are set by
 `LED_PIXEL_TYPE` in `config.h` (default `NEO_RGB + NEO_KHZ800`). If muted shows
 green and unmuted shows red, switch it to `NEO_GRB`.
 
